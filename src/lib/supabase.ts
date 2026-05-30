@@ -1,19 +1,47 @@
 import { createClient } from '@supabase/supabase-js';
 
+// -------------------------------------------------
+// Clear any old Supabase token on page load (production only)
+// -------------------------------------------------
+if (typeof window !== 'undefined') {
+  // Remove stored auth token that may contain stale redirect URLs
+  localStorage.removeItem('supabase.auth.token');
+  // Clear Supabase refresh-token cookies (sb-*)
+  document.cookie
+    .split(';')
+    .forEach(c => {
+      const name = c.trim().split('=')[0];
+      if (name.startsWith('sb-')) {
+        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;`;
+      }
+    });
+}
+
+// -------------------------------------------------
+// Load and validate environment variables
+// -------------------------------------------------
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || supabaseUrl === 'https://your-project.supabase.co' || supabaseUrl === 'https://your-project.supabase.co/') {
+if (!supabaseUrl) {
   throw new Error('VITE_SUPABASE_URL is not configured. Please set a valid Supabase project URL in your .env file.');
 }
-
-if (!supabaseAnonKey || supabaseAnonKey === 'your-anon-key') {
+if (!supabaseAnonKey) {
   throw new Error('VITE_SUPABASE_ANON_KEY is not configured. Please set a valid Supabase anon public key in your .env file.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// -------------------------------------------------
+// Create Supabase client
+// -------------------------------------------------
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  autoRefreshToken: true,
+  persistSession: true,
+  detectSessionInUrl: true,
+});
 
-// Database helper functions
+// -------------------------------------------------------------------
+// Database helper functions (unchanged)
+// -------------------------------------------------------------------
 export async function signUp(email: string, password: string, fullName: string, role: string = 'user') {
   const { data, error } = await supabase.auth.signUp({
     email,
