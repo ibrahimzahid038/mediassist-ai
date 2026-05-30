@@ -38,11 +38,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role: (profile.role as UserRole) || 'user',
         avatar_url: profile.avatar_url || supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || '',
         phone: profile.phone || supabaseUser.user_metadata?.phone || supabaseUser.phone || '',
-        blood_group: profile.blood_group || '',
-        allergies: profile.allergies || '',
-        medical_conditions: profile.medical_conditions || '',
-        emergency_contact: profile.emergency_contact || '',
-        location: profile.location || '',
+        blood_group: profile.blood_group || supabaseUser.user_metadata?.blood_group || '',
+        allergies: profile.allergies || supabaseUser.user_metadata?.allergies || '',
+        medical_conditions: profile.medical_conditions || supabaseUser.user_metadata?.medical_conditions || '',
+        emergency_contact: profile.emergency_contact || supabaseUser.user_metadata?.emergency_contact || '',
+        location: profile.location || supabaseUser.user_metadata?.location || '',
         role_selected: profile.role_selected ?? false,
         created_at: profile.created_at || supabaseUser.created_at,
       };
@@ -170,13 +170,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleUpdateUserRole = async (selectedRole: UserRole) => {
     if (!user) return;
-    setLoading(true);
     try {
-      // 1. Update public profiles table
+      // 1. Update public profiles table (using upsert in case the row doesn't exist yet)
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ role: selectedRole, role_selected: true })
-        .eq('id', user.id);
+        .upsert({
+          id: user.id,
+          full_name: user.full_name || '',
+          email: user.email || '',
+          avatar_url: user.avatar_url || '',
+          phone: user.phone || '',
+          role: selectedRole,
+          role_selected: true,
+          updated_at: new Date().toISOString(),
+        });
       
       if (profileError) throw profileError;
 
@@ -196,8 +203,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       toast.error(err.message || 'Failed to complete profile configuration');
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 
