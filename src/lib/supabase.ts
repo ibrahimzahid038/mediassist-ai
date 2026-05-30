@@ -1,21 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
-
-// -------------------------------------------------
-// Clear any old Supabase token on page load (production only)
-// -------------------------------------------------
-if (typeof window !== 'undefined') {
-  // Remove stored auth token that may contain stale redirect URLs
-  localStorage.removeItem('supabase.auth.token');
-  // Clear Supabase refresh-token cookies (sb-*)
-  document.cookie
-    .split(';')
-    .forEach(c => {
-      const name = c.trim().split('=')[0];
-      if (name.startsWith('sb-')) {
-        document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;`;
-      }
-    });
-}
+// NOTE: Removed aggressive session-clearing code that was here previously.
+// It was wiping sb-* cookies and localStorage tokens on every page load,
+// which destroyed the active Supabase session and caused infinite loading loops.
 
 // -------------------------------------------------
 // Load and validate environment variables
