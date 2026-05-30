@@ -10,7 +10,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string, role?: UserRole, phone?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (role?: UserRole) => Promise<void>;
   updateUserRole: (role: UserRole) => Promise<void>;
 }
 
@@ -94,6 +94,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         if (session?.user) {
           const mapped = await fetchProfileAndMap(session.user);
+          // Apply pending role if needed
+          const pending = localStorage.getItem('pending_google_sign_in_role') as any;
+          if (pending && !mapped.role_selected) {
+            try {
+              await supabase.auth.updateUser({ data: { role: pending, role_selected: true } });
+              // Update public profile if column exists
+              await supabase.from('profiles').update({ role: pending, role_selected: true }).eq('id', mapped.id);
+              mapped.role = pending as any;
+              mapped.role_selected = true;
+              localStorage.removeItem('pending_google_sign_in_role');
+            } catch (e) {
+              console.warn('Failed to apply pending role after Google sign-in', e);
+            }
+          }
           setUser(mapped);
         } else {
           setUser(null);
@@ -121,6 +135,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         if (session?.user) {
           const mapped = await fetchProfileAndMap(session.user);
+          const pending = localStorage.getItem('pending_google_sign_in_role') as any;
+          if (pending && !mapped.role_selected) {
+            try {
+              await supabase.auth.updateUser({ data: { role: pending, role_selected: true } });
+              await supabase.from('profiles').update({ role: pending, role_selected: true }).eq('id', mapped.id);
+              mapped.role = pending as any;
+              mapped.role_selected = true;
+              localStorage.removeItem('pending_google_sign_in_role');
+            } catch (e) {
+              console.warn('Failed to apply pending role after auth state change', e);
+            }
+          }
           setUser(mapped);
         } else {
           setUser(null);
@@ -199,7 +225,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const handleSignInWithGoogle = async () => {
+  const handleSignInWithGoogle = async (role?: UserRole) => {
+    // Store pending role if provided so it can be applied after redirect
+    if (role) {
+      localStorage.setItem('pending_google_sign_in_role', role);
+    }
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({

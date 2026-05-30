@@ -29,15 +29,12 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
     setLoading(true);
-    try {
-      await signInWithGoogle();
-      // Supabase redirects us, so we don't need to navigate manually
-    } catch (err: any) {
-      toast.error(err.message || 'Google Sign-In failed');
-      setLoading(false);
-    }
+    // Initiate Google OAuth; Supabase redirects the user.
+    signInWithGoogle();
+    // Reset loading immediately as we cannot await the redirect.
+    setLoading(false);
   };
 
   return (
