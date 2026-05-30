@@ -49,7 +49,7 @@ export function DashboardLayout() {
 
       {/* Glassmorphic First-Time Google Signup Role Selection Overlay */}
       <AnimatePresence>
-        {user && user.role !== 'admin' && user.role_selected === false && (
+        {user && user.role_selected === false && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

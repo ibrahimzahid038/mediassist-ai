@@ -38,12 +38,14 @@ export default function RegisterPage() {
     }
   };
 
-  const handleGoogleSignUp = () => {
+  const handleGoogleSignUp = async () => {
     setLoading(true);
-    // Initiate Google OAuth for sign-up; redirect will occur.
-    signInWithGoogle();
-    // Reset loading immediately as we cannot await the redirect.
-    setLoading(false);
+    try {
+      await signInWithGoogle();
+    } catch (err: any) {
+      toast.error(err.message || 'Google Sign-Up failed');
+      setLoading(false);
+    }
   };
 
   const roles = [

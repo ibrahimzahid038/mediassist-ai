@@ -10,7 +10,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string, role?: UserRole, phone?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
-  signInWithGoogle: (role?: UserRole) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   updateUserRole: (role: UserRole) => Promise<void>;
 }
 
@@ -22,7 +22,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Helper to construct User object from profiles table with metadata fallback
   const fetchProfileAndMap = async (supabaseUser: any): Promise<User> => {
-    console.log("[AuthContext] fetchProfileAndMap requested for user:", supabaseUser.id);
     try {
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -30,16 +29,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', supabaseUser.id)
         .single();
       
-      if (error) {
-        console.warn("[AuthContext] Profile database fetch failed (could be stale cache). Error:", error.message || error);
-        throw error;
-      }
-      if (!profile) {
-        console.warn("[AuthContext] No profile found in DB for user:", supabaseUser.id);
-        throw new Error('No profile found');
-      }
+      if (error || !profile) throw error || new Error('No profile found');
       
-      console.log("[AuthContext] Profile successfully fetched from DB:", profile);
       return {
         id: supabaseUser.id,
         full_name: profile.full_name || supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'User',
@@ -52,11 +43,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         medical_conditions: profile.medical_conditions || '',
         emergency_contact: profile.emergency_contact || '',
         location: profile.location || '',
-        role_selected: profile.role_selected ?? supabaseUser.user_metadata?.role_selected ?? false,
+        role_selected: profile.role_selected ?? false,
         created_at: profile.created_at || supabaseUser.created_at,
       };
-    } catch (err: any) {
-      console.warn("[AuthContext] Profile fetch error. Falling back directly to Auth metadata. Error:", err?.message || err);
+    } catch (err) {
+      // Fallback directly to OAuth metadata if profile fetch fails
       return {
         id: supabaseUser.id,
         full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'User',
@@ -76,95 +67,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    let active = true;
-    console.log("[AuthContext] Initializing session check on mount...");
-
-    // Safety timeout: guarantee loading is dismissed within 5 seconds no matter what
-    const safetyTimer = setTimeout(() => {
-      if (active) {
-        console.warn("[AuthContext] Safety timeout reached (5s). Forcing loading=false.");
-        setLoading(false);
-      }
-    }, 5000);
-
     // Check active session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!active) return;
-      console.log("[AuthContext] getSession resolved. Session exists:", !!session, "User ID:", session?.user?.id || "None");
-      try {
-        if (session?.user) {
-          const mapped = await fetchProfileAndMap(session.user);
-          // Apply pending role if needed
-          const pending = localStorage.getItem('pending_google_sign_in_role') as any;
-          if (pending && !mapped.role_selected) {
-            try {
-              await supabase.auth.updateUser({ data: { role: pending, role_selected: true } });
-              // Update public profile if column exists
-              await supabase.from('profiles').update({ role: pending, role_selected: true }).eq('id', mapped.id);
-              mapped.role = pending as any;
-              mapped.role_selected = true;
-              localStorage.removeItem('pending_google_sign_in_role');
-            } catch (e) {
-              console.warn('Failed to apply pending role after Google sign-in', e);
-            }
-          }
-          setUser(mapped);
-        } else {
-          setUser(null);
-        }
-      } catch (err) {
-        console.error("[AuthContext] Error mapping user from session:", err);
+      if (session?.user) {
+        const mapped = await fetchProfileAndMap(session.user);
+        setUser(mapped);
+      } else {
         setUser(null);
-      } finally {
-        clearTimeout(safetyTimer);
-        setLoading(false);
       }
-    }).catch((err) => {
-      console.error("[AuthContext] getSession promise rejected:", err);
-      if (active) {
-        setUser(null);
-        clearTimeout(safetyTimer);
-        setLoading(false);
-      }
+      setLoading(false);
+    }).catch(() => {
+      setUser(null);
+      setLoading(false);
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!active) return;
-      console.log("[AuthContext] onAuthStateChange event:", event, "Session exists:", !!session, "User ID:", session?.user?.id || "None");
-      try {
-        if (session?.user) {
-          const mapped = await fetchProfileAndMap(session.user);
-          const pending = localStorage.getItem('pending_google_sign_in_role') as any;
-          if (pending && !mapped.role_selected) {
-            try {
-              await supabase.auth.updateUser({ data: { role: pending, role_selected: true } });
-              await supabase.from('profiles').update({ role: pending, role_selected: true }).eq('id', mapped.id);
-              mapped.role = pending as any;
-              mapped.role_selected = true;
-              localStorage.removeItem('pending_google_sign_in_role');
-            } catch (e) {
-              console.warn('Failed to apply pending role after auth state change', e);
-            }
-          }
-          setUser(mapped);
-        } else {
-          setUser(null);
-        }
-      } catch (err) {
-        console.error("[AuthContext] Error mapping user in auth state change:", err);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const mapped = await fetchProfileAndMap(session.user);
+        setUser(mapped);
+      } else {
         setUser(null);
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     });
 
-    return () => {
-      console.log("[AuthContext] Cleaning up session check mount...");
-      active = false;
-      clearTimeout(safetyTimer);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleSignIn = async (email: string, password: string) => {
@@ -225,11 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
-  const handleSignInWithGoogle = async (role?: UserRole) => {
-    // Store pending role if provided so it can be applied after redirect
-    if (role) {
-      localStorage.setItem('pending_google_sign_in_role', role);
-    }
+  const handleSignInWithGoogle = async () => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -248,7 +172,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     setLoading(true);
     try {
-      // 1. Update auth user metadata first, because it is synchronous and reliable
+      // 1. Update public profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ role: selectedRole, role_selected: true })
+        .eq('id', user.id);
+      
+      if (profileError) throw profileError;
+
+      // 2. Update auth user metadata
       const { error: authError } = await supabase.auth.updateUser({
         data: {
           role: selectedRole,
@@ -256,28 +188,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
       if (authError) throw authError;
-
-      // 2. Try to update the public profiles table
-      try {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ role: selectedRole, role_selected: true })
-          .eq('id', user.id);
-        
-        if (profileError) {
-          // If the role_selected column doesn't exist in the PostgREST cache yet, update just 'role'
-          console.warn('Schema cache error or stale cache. Retrying profile update without role_selected...');
-          const { error: fallbackError } = await supabase
-            .from('profiles')
-            .update({ role: selectedRole })
-            .eq('id', user.id);
-          
-          if (fallbackError) throw fallbackError;
-        }
-      } catch (profileErr: any) {
-        console.error('Failed to update public profiles table, but auth metadata was updated successfully:', profileErr);
-        // Do not block the user here, since their metadata updated successfully and they can navigate
-      }
 
       // 3. Update local state
       setUser((prev) => (prev ? { ...prev, role: selectedRole, role_selected: true } : null));
