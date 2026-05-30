@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         medical_conditions: profile.medical_conditions || '',
         emergency_contact: profile.emergency_contact || '',
         location: profile.location || '',
-        role_selected: profile.role_selected ?? false,
+        role_selected: profile.role_selected ?? supabaseUser.user_metadata?.role_selected ?? false,
         created_at: profile.created_at || supabaseUser.created_at,
       };
     } catch (err) {
@@ -172,15 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     setLoading(true);
     try {
-      // 1. Update public profiles table
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ role: selectedRole, role_selected: true })
-        .eq('id', user.id);
-      
-      if (profileError) throw profileError;
-
-      // 2. Update auth user metadata
+      // 1. Update auth user metadata first, because it is synchronous and reliable
       const { error: authError } = await supabase.auth.updateUser({
         data: {
           role: selectedRole,
@@ -188,6 +180,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       });
       if (authError) throw authError;
+
+      // 2. Try to update the public profiles table
+      try {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ role: selectedRole, role_selected: true })
+          .eq('id', user.id);
+        
+        if (profileError) {
+          // If the role_selected column doesn't exist in the PostgREST cache yet, update just 'role'
+          console.warn('Schema cache error or stale cache. Retrying profile update without role_selected...');
+          const { error: fallbackError } = await supabase
+            .from('profiles')
+            .update({ role: selectedRole })
+            .eq('id', user.id);
+          
+          if (fallbackError) throw fallbackError;
+        }
+      } catch (profileErr: any) {
+        console.error('Failed to update public profiles table, but auth metadata was updated successfully:', profileErr);
+        // Do not block the user here, since their metadata updated successfully and they can navigate
+      }
 
       // 3. Update local state
       setUser((prev) => (prev ? { ...prev, role: selectedRole, role_selected: true } : null));
