@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { MainLayout, DashboardLayout } from './layouts/Layouts';
 import { FullScreenLoader } from './components/LoadingStates';
+import AuthCallback from './pages/AuthCallback';
+
 
 // Public pages
 import LandingPage from './pages/LandingPage';
@@ -53,7 +55,8 @@ export default function App() {
         <Route path="/about" element={<LandingPage />} />
         <Route path="/contact" element={<PlaceholderPage title="Contact Us" description="Get in touch with MediAssist AI team for support, partnerships, and inquiries." />} />
         <Route path="/faq" element={<LandingPage />} />
-      </Route>
+      <Route path="/auth/callback" element={<AuthCallback />} />
+</Route>
 
       {/* Protected dashboard routes with DashboardLayout (Navbar + Sidebar) */}
       <Route
