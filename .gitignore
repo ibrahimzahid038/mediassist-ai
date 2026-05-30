@@ -1,0 +1,53 @@
+# -------------------------------------------------
+# 1️⃣ Logs & debug files
+# -------------------------------------------------
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# -------------------------------------------------
+# 2️⃣ Build outputs
+# -------------------------------------------------
+dist/
+dist-ssr/
+# Vite/Rollup generated files that you never edit
+*.local
+
+# -------------------------------------------------
+# 3️⃣ Dependency folder
+# -------------------------------------------------
+node_modules/
+
+# -------------------------------------------------
+# 4️⃣ Environment / secret files
+# -------------------------------------------------
+# Never commit API keys, tokens, or any config that should stay private
+.env
+.env.local
+.env.production
+.env.*.local
+
+# -------------------------------------------------
+# 5️⃣ Editor / IDE artefacts
+# -------------------------------------------------
+.vscode/
+!.vscode/extensions.json   # keep the extensions list (optional)
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# -------------------------------------------------
+# 6️⃣ Miscellaneous generated files (optional)
+# -------------------------------------------------
+# If you ever use a lock‑file backup or other temporary artefacts,
+# you can add them here, e.g.:
+# .npmrc.backup
+# .yarnrc.backup
