@@ -34,9 +34,11 @@ if (!supabaseAnonKey) {
 // Create Supabase client
 // -------------------------------------------------
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  autoRefreshToken: true,
-  persistSession: true,
-  detectSessionInUrl: true,
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+  },
 });
 
 // -------------------------------------------------------------------
