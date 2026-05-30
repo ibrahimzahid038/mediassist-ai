@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         medical_conditions: profile.medical_conditions || '',
         emergency_contact: profile.emergency_contact || '',
         location: profile.location || '',
-        role_selected: profile.role_selected,
+        role_selected: profile.role_selected ?? false,
         created_at: profile.created_at || supabaseUser.created_at,
       };
     } catch (err) {
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         medical_conditions: supabaseUser.user_metadata?.medical_conditions || '',
         emergency_contact: supabaseUser.user_metadata?.emergency_contact || '',
         location: supabaseUser.user_metadata?.location || '',
-        role_selected: supabaseUser.user_metadata?.role_selected ?? true,
+        role_selected: supabaseUser.user_metadata?.role_selected ?? false,
         created_at: supabaseUser.created_at,
       };
     }
@@ -184,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error: authError } = await supabase.auth.updateUser({
         data: {
           role: selectedRole,
+          role_selected: true,
         }
       });
       if (authError) throw authError;
