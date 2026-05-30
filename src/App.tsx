@@ -55,8 +55,10 @@ export default function App() {
         <Route path="/about" element={<LandingPage />} />
         <Route path="/contact" element={<PlaceholderPage title="Contact Us" description="Get in touch with MediAssist AI team for support, partnerships, and inquiries." />} />
         <Route path="/faq" element={<LandingPage />} />
+      </Route>
+
+      {/* OAuth callback – standalone, no layout wrapper */}
       <Route path="/auth/callback" element={<AuthCallback />} />
-</Route>
 
       {/* Protected dashboard routes with DashboardLayout (Navbar + Sidebar) */}
       <Route
