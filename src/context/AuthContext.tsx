@@ -69,14 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    // Safety timeout: guarantee loading is dismissed within 4 seconds no matter what
-    const safetyTimer = setTimeout(() => {
-      if (active) {
-        console.warn("[AuthContext] Safety timeout reached (4s). Forcing loading=false.");
-        setLoading(false);
-      }
-    }, 4000);
-
     // Check active session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!active) return;
@@ -91,14 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("[AuthContext] Error checking session on mount:", err);
         setUser(null);
       } finally {
-        clearTimeout(safetyTimer);
         setLoading(false);
       }
     }).catch((err) => {
       console.error("[AuthContext] getSession promise rejected:", err);
       if (active) {
         setUser(null);
-        clearTimeout(safetyTimer);
         setLoading(false);
       }
     });
@@ -123,14 +113,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error("[AuthContext] Error on auth state change:", err);
         setUser(null);
       } finally {
-        clearTimeout(safetyTimer);
         setLoading(false);
       }
     });
 
     return () => {
       active = false;
-      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
   }, []);
