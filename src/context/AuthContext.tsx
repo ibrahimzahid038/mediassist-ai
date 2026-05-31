@@ -104,8 +104,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!active) return;
+
+      // Ignore initial session event on mount to prevent race conditions with getSession()
+      if (event === 'INITIAL_SESSION') {
+        return;
+      }
+
       try {
         if (session?.user) {
           const mapped = await fetchProfileAndMap(session.user);
