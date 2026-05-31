@@ -67,32 +67,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let active = true;
+
+    // Safety timeout: guarantee loading is dismissed within 4 seconds no matter what
+    const safetyTimer = setTimeout(() => {
+      if (active) {
+        console.warn("[AuthContext] Safety timeout reached (4s). Forcing loading=false.");
+        setLoading(false);
+      }
+    }, 4000);
+
     // Check active session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const mapped = await fetchProfileAndMap(session.user);
-        setUser(mapped);
-      } else {
+      if (!active) return;
+      try {
+        if (session?.user) {
+          const mapped = await fetchProfileAndMap(session.user);
+          setUser(mapped);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error("[AuthContext] Error checking session on mount:", err);
         setUser(null);
+      } finally {
+        clearTimeout(safetyTimer);
+        setLoading(false);
       }
-      setLoading(false);
-    }).catch(() => {
-      setUser(null);
-      setLoading(false);
+    }).catch((err) => {
+      console.error("[AuthContext] getSession promise rejected:", err);
+      if (active) {
+        setUser(null);
+        clearTimeout(safetyTimer);
+        setLoading(false);
+      }
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const mapped = await fetchProfileAndMap(session.user);
-        setUser(mapped);
-      } else {
+      if (!active) return;
+      try {
+        if (session?.user) {
+          const mapped = await fetchProfileAndMap(session.user);
+          setUser(mapped);
+        } else {
+          setUser(null);
+        }
+      } catch (err) {
+        console.error("[AuthContext] Error on auth state change:", err);
         setUser(null);
+      } finally {
+        clearTimeout(safetyTimer);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      clearTimeout(safetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSignIn = async (email: string, password: string) => {
