@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Heart, Mail, Globe } from 'lucide-react';
 
+// Custom SVG icons not available in lucide-react
 function Github({ className }: { className?: string }) {
   return (
     <svg
