@@ -8,7 +8,7 @@ import {
 import { useState } from 'react';
 import Footer from '../components/Footer';
 
-const fadeIn = {
+const fadeIn: any = {
   hidden: { opacity: 0, y: 30 },
   visible: (i: number) => ({
     opacity: 1, y: 0,

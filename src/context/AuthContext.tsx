@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, 8000);
 
     // Check active session on mount with timeout
-    const sessionTimeout = new Promise((_, reject) =>
+    const sessionTimeout = new Promise<any>((_, reject) =>
       setTimeout(() => reject(new Error('Session check timeout')), 5000)
     );
 
