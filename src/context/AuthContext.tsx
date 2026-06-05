@@ -25,14 +25,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Helper to construct User object from profiles table with metadata fallback
   const fetchProfileAndMap = async (supabaseUser: any): Promise<User> => {
+    // Create a fallback function
+    const fallbackUser = (): User => ({
+      id: supabaseUser.id,
+      full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'User',
+      email: supabaseUser.email || '',
+      role: (supabaseUser.user_metadata?.role as UserRole) || 'user',
+      avatar_url: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || '',
+      phone: supabaseUser.user_metadata?.phone || supabaseUser.phone || '',
+      blood_group: supabaseUser.user_metadata?.blood_group || '',
+      allergies: supabaseUser.user_metadata?.allergies || '',
+      medical_conditions: supabaseUser.user_metadata?.medical_conditions || '',
+      emergency_contact: supabaseUser.user_metadata?.emergency_contact || '',
+      location: supabaseUser.user_metadata?.location || '',
+      role_selected: supabaseUser.user_metadata?.role_selected ?? false,
+      created_at: supabaseUser.created_at,
+    });
+
     try {
-      const { data: profile, error } = await supabase
+      // Add 3-second timeout for profile fetch
+      const profilePromise = supabase
         .from('profiles')
         .select('*')
         .eq('id', supabaseUser.id)
         .single();
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
+      );
+
+      const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
       
-      if (error || !profile) throw error || new Error('No profile found');
+      if (error || !profile) {
+        return fallbackUser();
+      }
       
       return {
         id: supabaseUser.id,
@@ -50,27 +76,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         created_at: profile.created_at || supabaseUser.created_at,
       };
     } catch (err) {
-      // Fallback directly to OAuth metadata if profile fetch fails
-      return {
-        id: supabaseUser.id,
-        full_name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'User',
-        email: supabaseUser.email || '',
-        role: (supabaseUser.user_metadata?.role as UserRole) || 'user',
-        avatar_url: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || '',
-        phone: supabaseUser.user_metadata?.phone || supabaseUser.phone || '',
-        blood_group: supabaseUser.user_metadata?.blood_group || '',
-        allergies: supabaseUser.user_metadata?.allergies || '',
-        medical_conditions: supabaseUser.user_metadata?.medical_conditions || '',
-        emergency_contact: supabaseUser.user_metadata?.emergency_contact || '',
-        location: supabaseUser.user_metadata?.location || '',
-        role_selected: supabaseUser.user_metadata?.role_selected ?? false,
-        created_at: supabaseUser.created_at,
-      };
+      console.warn("[AuthContext] Profile fetch failed, using fallback:", err);
+      // Fallback directly to OAuth metadata if profile fetch fails or times out
+      return fallbackUser();
     }
   };
 
   useEffect(() => {
     let active = true;
+
+    // Overall maximum timeout for entire auth initialization (8 seconds)
+    const maxTimeout = setTimeout(() => {
+      if (active) {
+        console.warn("[AuthContext] Auth initialization timeout - setting user to null");
+        setUser(null);
+        setLoading(false);
+      }
+    }, 8000);
 
     // Check active session on mount with timeout
     const sessionTimeout = new Promise((_, reject) =>
@@ -83,15 +105,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           if (session?.user) {
             const mapped = await fetchProfileAndMap(session.user);
-            setUser(mapped);
+            if (active) setUser(mapped);
           } else {
-            setUser(null);
+            if (active) setUser(null);
           }
         } catch (err) {
           console.error("[AuthContext] Error checking session on mount:", err);
-          setUser(null);
+          if (active) setUser(null);
         } finally {
-          if (active) setLoading(false);
+          if (active) {
+            setLoading(false);
+            clearTimeout(maxTimeout);
+          }
         }
       })
       .catch((err) => {
@@ -99,6 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (active) {
           setUser(null);
           setLoading(false);
+          clearTimeout(maxTimeout);
         }
       });
 
@@ -133,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       active = false;
+      clearTimeout(maxTimeout);
       subscription.unsubscribe();
     };
   }, []);
