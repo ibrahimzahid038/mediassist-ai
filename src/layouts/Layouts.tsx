@@ -51,6 +51,7 @@ export function DashboardLayout() {
       <AnimatePresence>
         {user && user.role_selected === false && (
           <motion.div
+            key="role-selection-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

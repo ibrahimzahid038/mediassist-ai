@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import type { User, UserRole } from '../types';
 import toast from 'react-hot-toast';
@@ -19,6 +19,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Guard flag: prevents onAuthStateChange from overwriting state during role update
+  const isUpdatingRole = useRef(false);
 
   // Helper to construct User object from profiles table with metadata fallback
   const fetchProfileAndMap = async (supabaseUser: any): Promise<User> => {
@@ -99,6 +102,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Ignore initial session event on mount to prevent race conditions with getSession()
       if (event === 'INITIAL_SESSION') {
+        return;
+      }
+
+      // Skip re-fetching during an active role update to prevent stale data from overwriting local state
+      if (isUpdatingRole.current) {
         return;
       }
 
@@ -198,6 +206,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleUpdateUserRole = async (selectedRole: UserRole) => {
     if (!user) return;
+
+    // Set the guard flag so onAuthStateChange skips re-fetching during this update
+    isUpdatingRole.current = true;
+
     try {
       // 1. Update public profiles table (using upsert in case the row doesn't exist yet)
       const { error: profileError } = await supabase
@@ -231,6 +243,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       toast.error(err.message || 'Failed to complete profile configuration');
       throw err;
+    } finally {
+      // Release the guard after a short delay to let any pending onAuthStateChange callbacks settle
+      setTimeout(() => { isUpdatingRole.current = false; }, 2000);
     }
   };
 
