@@ -72,29 +72,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let active = true;
 
-    // Check active session on mount
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!active) return;
-      try {
-        if (session?.user) {
-          const mapped = await fetchProfileAndMap(session.user);
-          setUser(mapped);
-        } else {
+    // Check active session on mount with timeout
+    const sessionTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Session check timeout')), 5000)
+    );
+
+    Promise.race([supabase.auth.getSession(), sessionTimeout])
+      .then(async ({ data: { session } }) => {
+        if (!active) return;
+        try {
+          if (session?.user) {
+            const mapped = await fetchProfileAndMap(session.user);
+            setUser(mapped);
+          } else {
+            setUser(null);
+          }
+        } catch (err) {
+          console.error("[AuthContext] Error checking session on mount:", err);
           setUser(null);
+        } finally {
+          if (active) setLoading(false);
         }
-      } catch (err) {
-        console.error("[AuthContext] Error checking session on mount:", err);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    }).catch((err) => {
-      console.error("[AuthContext] getSession promise rejected:", err);
-      if (active) {
-        setUser(null);
-        setLoading(false);
-      }
-    });
+      })
+      .catch((err) => {
+        console.error("[AuthContext] Session check failed:", err);
+        if (active) {
+          setUser(null);
+          setLoading(false);
+        }
+      });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
