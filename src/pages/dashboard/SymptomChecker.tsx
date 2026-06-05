@@ -8,6 +8,8 @@ import { analyzeSymptoms, SYMPTOM_CATEGORIES } from '../../services/aiService';
 import type { SymptomAnalysis, RiskLevel } from '../../types';
 import { cn, getRiskBgClass, generateReportId } from '../../lib/utils';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../context/AuthContext';
+import { createReport } from '../../lib/supabase';
 
 const riskInfo: Record<RiskLevel, { color: string; bg: string; icon: typeof Shield; label: string }> = {
   low: { color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10', icon: Shield, label: 'Low Risk' },
@@ -17,6 +19,7 @@ const riskInfo: Record<RiskLevel, { color: string; bg: string; icon: typeof Shie
 };
 
 export default function SymptomCheckerPage() {
+  const { user } = useAuth();
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [customSymptom, setCustomSymptom] = useState('');
   const [naturalInput, setNaturalInput] = useState('');
@@ -66,8 +69,22 @@ export default function SymptomCheckerPage() {
     try {
       const result = await analyzeSymptoms(selectedSymptoms);
       setAnalysis(result);
+      
+      // Save report to database
+      if (user) {
+        await createReport({
+          user_id: user.id,
+          symptoms: selectedSymptoms,
+          ai_analysis: `Identified potential conditions: ${result.conditions.map(c => c.name).join(', ')}. AI Confidence: ${Math.round(result.confidence_score * 100)}%`,
+          risk_level: result.risk_level,
+          recommendations: [...result.precautions, ...result.next_steps, ...result.lifestyle_recommendations],
+        });
+      }
+
       if (result.risk_level === 'critical') {
         toast.error('⚠️ Critical risk detected! Please seek immediate medical attention.', { duration: 8000 });
+      } else {
+        toast.success('Analysis complete and report saved to your dashboard.');
       }
     } catch {
       toast.error('Analysis failed. Please try again.');

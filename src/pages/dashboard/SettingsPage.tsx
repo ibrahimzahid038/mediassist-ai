@@ -7,7 +7,7 @@ import {
   Download, Globe, Trash2, Save, HelpCircle, KeyRound, Sparkles
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase } from '../../lib/supabase';
+import { supabase, deleteUser } from '../../lib/supabase';
 
 export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
@@ -50,6 +50,24 @@ export default function SettingsPage() {
       toast.error(err.message || 'Failed to update password');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    const confirm = window.confirm('Are you absolutely sure you want to permanently delete your account? All your data will be lost and this action cannot be undone.');
+    if (confirm) {
+      setLoading(true);
+      try {
+        await deleteUser(user.id);
+        await supabase.auth.signOut();
+        toast.success('Your account has been permanently deleted.');
+      } catch (err: any) {
+        toast.error('Failed to delete account. Please try again or contact support.');
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -306,6 +324,26 @@ export default function SettingsPage() {
                   className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Delete Vault
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between py-2 border-t border-border/30 pt-4">
+                <div>
+                  <p className="text-sm font-semibold text-red-600 dark:text-red-400">Delete Account</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Permanently delete your entire account, including all personal data and login credentials.
+                  </p>
+                </div>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={loading}
+                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+                >
+                  {loading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <><Trash2 className="w-3.5 h-3.5" /> Delete Account</>
+                  )}
                 </button>
               </div>
             </div>
