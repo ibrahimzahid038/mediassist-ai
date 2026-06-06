@@ -1,31 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  Bell, Moon, Sun, Lock, Eye, EyeOff, Shield, Database,
-  Download, Globe, Trash2, Save, HelpCircle, KeyRound, Sparkles
+  Bell, Moon, Sun, Lock, Eye, EyeOff, Database,
+  Trash2, Save, KeyRound, Sparkles
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { supabase, deleteUser } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
   const { user } = useAuth();
+  const [loading, setLoading] = useState(false);
+  
+  // Notification preferences – loaded from user metadata so they persist across reloads
   const [emailAlerts, setEmailAlerts] = useState(true);
   const [pushAlerts, setPushAlerts] = useState(true);
   const [criticalOnly, setCriticalOnly] = useState(false);
-  const [language, setLanguage] = useState('en');
-  const [loading, setLoading] = useState(false);
-  
+
   // Password change state
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleSavePreferences = () => {
-    toast.success('Preferences saved successfully!');
+  // Load saved notification preferences from user metadata on mount
+  useEffect(() => {
+    if (user) {
+      const loadPrefs = async () => {
+        try {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          if (authUser?.user_metadata) {
+            const meta = authUser.user_metadata;
+            if (meta.email_alerts !== undefined) setEmailAlerts(meta.email_alerts);
+            if (meta.push_alerts !== undefined) setPushAlerts(meta.push_alerts);
+            if (meta.critical_only !== undefined) setCriticalOnly(meta.critical_only);
+          }
+        } catch (err) {
+          console.error('Failed to load notification preferences', err);
+        }
+      };
+      loadPrefs();
+    }
+  }, [user]);
+
+  const handleSavePreferences = async () => {
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          email_alerts: emailAlerts,
+          push_alerts: pushAlerts,
+          critical_only: criticalOnly,
+        }
+      });
+      if (error) throw error;
+      toast.success('Preferences saved successfully!');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save preferences');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
@@ -43,7 +78,6 @@ export default function SettingsPage() {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
       toast.success('Password updated successfully!');
-      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
@@ -55,19 +89,25 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = async () => {
     if (!user) return;
-    const confirm = window.confirm('Are you absolutely sure you want to permanently delete your account? All your data will be lost and this action cannot be undone.');
-    if (confirm) {
-      setLoading(true);
-      try {
-        await deleteUser(user.id);
-        await supabase.auth.signOut();
-        toast.success('Your account has been permanently deleted.');
-      } catch (err: any) {
-        toast.error('Failed to delete account. Please try again or contact support.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+    const confirmed = window.confirm(
+      'Are you absolutely sure you want to permanently delete your account? All your data will be lost and this action cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      // Call the Supabase RPC function that deletes the user from auth.users
+      // (a SECURITY DEFINER function created in the database)
+      const { error: rpcError } = await supabase.rpc('delete_own_account');
+      if (rpcError) throw rpcError;
+
+      await supabase.auth.signOut();
+      toast.success('Your account has been permanently deleted.');
+    } catch (err: any) {
+      toast.error('Failed to delete account. Please try again or contact support.');
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -118,7 +158,7 @@ export default function SettingsPage() {
               <Sun className="w-5 h-5 text-cyan-500" /> Appearance & Theme
             </h3>
             
-            <div className="flex items-center justify-between py-4 border-b border-border/50">
+            <div className="flex items-center justify-between py-4">
               <div>
                 <p className="text-sm font-semibold">System Theme</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -141,25 +181,6 @@ export default function SettingsPage() {
                   )}
                 </motion.div>
               </button>
-            </div>
-
-            <div className="flex items-center justify-between py-4">
-              <div>
-                <p className="text-sm font-semibold">Language Select</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Choose your preferred medical terminology language.
-                </p>
-              </div>
-              <select
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="input-field max-w-[150px] py-1 text-xs"
-              >
-                <option value="en">English (US)</option>
-                <option value="es">Español</option>
-                <option value="fr">Français</option>
-                <option value="de">Deutsch</option>
-              </select>
             </div>
           </section>
 
@@ -217,8 +238,12 @@ export default function SettingsPage() {
             </div>
 
             <div className="mt-6 flex justify-end">
-              <button onClick={handleSavePreferences} className="btn-primary py-1.5 px-4 text-sm flex items-center gap-1.5">
-                <Save className="w-4 h-4" /> Save Preferences
+              <button onClick={handleSavePreferences} disabled={loading} className="btn-primary py-1.5 px-4 text-sm flex items-center gap-1.5">
+                {loading ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <><Save className="w-4 h-4" /> Save Preferences</>
+                )}
               </button>
             </div>
           </section>
@@ -287,65 +312,30 @@ export default function SettingsPage() {
             </form>
           </section>
 
-          {/* Data Management Section */}
+          {/* Data Management Section — only Delete Account remains */}
           <section id="data" className="glass-card p-6 scroll-mt-6 border border-red-500/10">
             <h3 className="text-lg font-semibold font-display flex items-center gap-2 mb-6">
-              <Database className="w-5 h-5 text-emerald-500" /> Data Storage & Privacy
+              <Database className="w-5 h-5 text-red-500" /> Danger Zone
             </h3>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between py-2">
-                <div>
-                  <p className="text-sm font-semibold">Export Medical History</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Download all your reports, chat histories, and profile settings as a structured JSON file.
-                  </p>
-                </div>
-                <button
-                  onClick={() => toast.success('Data export started!')}
-                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-border hover:bg-accent transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5" /> Export Data
-                </button>
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <p className="text-sm font-semibold text-red-600 dark:text-red-400">Delete Account</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Permanently delete your entire account, including all personal data and login credentials. This cannot be undone.
+                </p>
               </div>
-
-              <div className="flex items-center justify-between py-2 border-t border-border/30 pt-4">
-                <div>
-                  <p className="text-sm font-semibold text-red-600 dark:text-red-400">Purge Medical Vault</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Permanently delete all diagnostic reports, chat history, and symptom logs. This cannot be undone.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    const confirm = window.confirm('Are you absolutely sure you want to delete all your medical data? This cannot be undone.');
-                    if (confirm) toast.success('All history has been permanently purged.');
-                  }}
-                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-500/30 text-red-500 hover:bg-red-500/10 transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Delete Vault
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between py-2 border-t border-border/30 pt-4">
-                <div>
-                  <p className="text-sm font-semibold text-red-600 dark:text-red-400">Delete Account</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Permanently delete your entire account, including all personal data and login credentials.
-                  </p>
-                </div>
-                <button
-                  onClick={handleDeleteAccount}
-                  disabled={loading}
-                  className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
-                >
-                  {loading ? (
-                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <><Trash2 className="w-3.5 h-3.5" /> Delete Account</>
-                  )}
-                </button>
-              </div>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={loading}
+                className="flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {loading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <><Trash2 className="w-3.5 h-3.5" /> Delete Account</>
+                )}
+              </button>
             </div>
           </section>
         </div>

@@ -28,7 +28,7 @@ export default function Sidebar() {
     { name: 'Symptom Checker', href: '/dashboard/symptoms', icon: Stethoscope },
     { name: 'AI Chat', href: '/dashboard/chat', icon: MessageSquare },
     { name: 'Reports', href: '/dashboard/reports', icon: FileText },
-    { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, badge: 2 },
+    { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
     { name: 'Profile', href: '/dashboard/profile', icon: User },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];
@@ -38,7 +38,7 @@ export default function Sidebar() {
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
     { name: 'Users', href: '/dashboard/users', icon: Users },
     { name: 'Reports', href: '/dashboard/reports', icon: FileText },
-    { name: 'Emergency Alerts', href: '/dashboard/emergencies', icon: AlertTriangle, badge: 2 },
+    { name: 'Emergency Alerts', href: '/dashboard/emergencies', icon: AlertTriangle },
     { name: 'Database', href: '/dashboard/database', icon: Database },
     { name: 'Security', href: '/dashboard/security', icon: Shield },
     { name: 'Settings', href: '/dashboard/settings', icon: Settings },
@@ -47,7 +47,7 @@ export default function Sidebar() {
   const clientLinks: SidebarLink[] = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Patient Reports', href: '/dashboard/reports', icon: FileText },
-    { name: 'Critical Cases', href: '/dashboard/emergencies', icon: AlertTriangle, badge: 5 },
+    { name: 'Critical Cases', href: '/dashboard/emergencies', icon: AlertTriangle },
     { name: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
     { name: 'Search Patients', href: '/dashboard/search', icon: Search },
     { name: 'Clinic Profile', href: '/dashboard/profile', icon: Building2 },

@@ -171,11 +171,19 @@ export async function getAllUsers() {
   return data;
 }
 
-// Admin: delete user profile (trigger handles auth deletion)
+// Delete the current user's account (profile + auth record)
+// Requires a 'delete_own_account' SQL function in Supabase with SECURITY DEFINER.
+// See setup guide for the SQL to create this function.
 export async function deleteUser(userId: string) {
-  const { error } = await supabase
+  // First delete the profile row
+  const { error: profileError } = await supabase
     .from('profiles')
     .delete()
     .eq('id', userId);
-  if (error) throw error;
+  if (profileError) throw profileError;
+
+  // Then delete from auth.users via RPC
+  const { error: rpcError } = await supabase.rpc('delete_own_account');
+  if (rpcError) throw rpcError;
 }
+
