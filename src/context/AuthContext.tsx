@@ -23,6 +23,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Guard flag: prevents onAuthStateChange from overwriting state during role update
   const isUpdatingRole = useRef(false);
 
+  // Permanent session-level flag: once role is confirmed in this browser session,
+  // never let a stale DB read re-show the overlay
+  const roleConfirmedThisSession = useRef(false);
+
+  // Helper: apply the session-level override so stale reads can never resurface the overlay
+  const applyRoleGuard = (mapped: User): User => {
+    if (roleConfirmedThisSession.current && !mapped.role_selected) {
+      return { ...mapped, role_selected: true };
+    }
+    // Also sync the ref if the DB already has it set
+    if (mapped.role_selected) {
+      roleConfirmedThisSession.current = true;
+    }
+    return mapped;
+  };
+
   // Helper to construct User object from profiles table with metadata fallback
   const fetchProfileAndMap = async (supabaseUser: any): Promise<User> => {
     // Create a fallback function
@@ -57,10 +73,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: profile, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
       
       if (error || !profile) {
-        return fallbackUser();
+        return applyRoleGuard(fallbackUser());
       }
       
-      return {
+      return applyRoleGuard({
         id: supabaseUser.id,
         full_name: profile.full_name || supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'User',
         email: profile.email || supabaseUser.email || '',
@@ -74,11 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         location: profile.location || supabaseUser.user_metadata?.location || '',
         role_selected: profile.role_selected ?? false,
         created_at: profile.created_at || supabaseUser.created_at,
-      };
+      });
     } catch (err) {
       console.warn("[AuthContext] Profile fetch failed, using fallback:", err);
       // Fallback directly to OAuth metadata if profile fetch fails or times out
-      return fallbackUser();
+      return applyRoleGuard(fallbackUser());
     }
   };
 
@@ -208,6 +224,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleSignOut = async () => {
     setLoading(true);
     try {
+      // Reset the session-level role guard on sign out
+      roleConfirmedThisSession.current = false;
       await supabase.auth.signOut();
       setUser(null);
     } finally {
@@ -242,6 +260,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Set the guard flag so onAuthStateChange skips re-fetching during this update
     isUpdatingRole.current = true;
+    // Mark role as confirmed for this entire browser session — this is the key fix.
+    // Even if a delayed onAuthStateChange event fetches stale data from the DB,
+    // this flag ensures role_selected is always forced to true.
+    roleConfirmedThisSession.current = true;
 
     try {
       // 1. Update public profiles table (using upsert in case the row doesn't exist yet)
@@ -269,16 +291,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       if (authError) throw authError;
 
-      // 3. Update local state
+      // 3. Update local state immediately — this dismisses the overlay
       setUser((prev) => (prev ? { ...prev, role: selectedRole, role_selected: true } : null));
       
       toast.success(`Account configured as ${selectedRole === 'client' ? 'Clinic' : 'Patient'}`);
     } catch (err: any) {
+      // If the update failed, roll back the session guard
+      roleConfirmedThisSession.current = false;
       toast.error(err.message || 'Failed to complete profile configuration');
       throw err;
     } finally {
-      // Release the guard after a short delay to let any pending onAuthStateChange callbacks settle
-      setTimeout(() => { isUpdatingRole.current = false; }, 2000);
+      // Release the guard after a generous delay to let any pending onAuthStateChange callbacks settle.
+      // Even after this guard drops, roleConfirmedThisSession ensures stale reads can't resurface the overlay.
+      setTimeout(() => { isUpdatingRole.current = false; }, 5000);
     }
   };
 
