@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, createNotification } from '../lib/supabase';
 import type { User, UserRole } from '../types';
 import toast from 'react-hot-toast';
 
@@ -295,6 +295,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser((prev) => (prev ? { ...prev, role: selectedRole, role_selected: true } : null));
       
       toast.success(`Account configured as ${selectedRole === 'client' ? 'Clinic' : 'Patient'}`);
+
+      // 4. Create a welcome notification for the new user
+      try {
+        await createNotification({
+          user_id: user.id,
+          title: '🎉 Welcome to MediAssist AI!',
+          message: `Your account has been set up as ${selectedRole === 'client' ? 'Clinic / Provider' : 'Patient / User'}. Explore the dashboard to get started with AI-powered health insights.`,
+          type: 'success',
+        });
+      } catch (notifErr) {
+        console.error('Failed to create welcome notification:', notifErr);
+      }
     } catch (err: any) {
       // If the update failed, roll back the session guard
       roleConfirmedThisSession.current = false;

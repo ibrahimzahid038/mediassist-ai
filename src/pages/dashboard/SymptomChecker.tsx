@@ -9,7 +9,7 @@ import type { SymptomAnalysis, RiskLevel } from '../../types';
 import { cn, getRiskBgClass, generateReportId } from '../../lib/utils';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { createReport } from '../../lib/supabase';
+import { createReport, createNotification } from '../../lib/supabase';
 
 const riskInfo: Record<RiskLevel, { color: string; bg: string; icon: typeof Shield; label: string }> = {
   low: { color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10', icon: Shield, label: 'Low Risk' },
@@ -79,6 +79,28 @@ export default function SymptomCheckerPage() {
           risk_level: result.risk_level,
           recommendations: [...result.precautions, ...result.next_steps, ...result.lifestyle_recommendations],
         });
+
+        // Create a notification based on risk level
+        try {
+          if (result.risk_level === 'critical' || result.risk_level === 'high') {
+            await createNotification({
+              user_id: user.id,
+              title: `⚠️ ${result.risk_level === 'critical' ? 'Critical' : 'High'} Risk Alert`,
+              message: `Your symptom analysis detected ${result.risk_level} risk for: ${result.conditions.map(c => c.name).join(', ')}. Please consult a healthcare professional.`,
+              type: result.risk_level === 'critical' ? 'error' : 'warning',
+            });
+          } else {
+            await createNotification({
+              user_id: user.id,
+              title: 'Symptom Analysis Complete',
+              message: `Your check for ${selectedSymptoms.slice(0, 3).join(', ')}${selectedSymptoms.length > 3 ? '...' : ''} is complete. Risk level: ${result.risk_level}. Report saved.`,
+              type: result.risk_level === 'medium' ? 'warning' : 'info',
+            });
+          }
+        } catch (notifErr) {
+          // Don't block the flow if notification creation fails
+          console.error('Failed to create notification:', notifErr);
+        }
       }
 
       if (result.risk_level === 'critical') {

@@ -146,6 +146,21 @@ export async function markNotificationRead(id: string) {
   if (error) throw error;
 }
 
+export async function createNotification(notification: {
+  user_id: string;
+  title: string;
+  message: string;
+  type?: 'info' | 'warning' | 'success' | 'error';
+}) {
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert([{ ...notification, read_status: false }])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // Emergency alerts
 export async function createEmergencyAlert(alert: {
   user_id: string;
