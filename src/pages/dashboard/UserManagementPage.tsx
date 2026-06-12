@@ -107,12 +107,6 @@ export default function UserManagementPage() {
           <h1 className="text-2xl md:text-3xl font-bold font-display">User Management</h1>
           <p className="text-muted-foreground mt-1">Control client accounts, manage roles, and review registrations</p>
         </div>
-        <button
-          onClick={() => toast.success('Invite link utility coming soon!')}
-          className="btn-primary py-1.5 px-4 text-sm flex items-center gap-1.5 self-start sm:self-center"
-        >
-          <UserPlus className="w-4 h-4" /> Add New User
-        </button>
       </div>
 
       {/* Stats Counter Row */}
