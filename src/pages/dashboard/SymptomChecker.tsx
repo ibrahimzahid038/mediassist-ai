@@ -9,7 +9,7 @@ import type { SymptomAnalysis, RiskLevel } from '../../types';
 import { cn, getRiskBgClass, generateReportId } from '../../lib/utils';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { createReport, createNotification } from '../../lib/supabase';
+import { createReport, createNotification, createEmergencyAlert } from '../../lib/supabase';
 
 const riskInfo: Record<RiskLevel, { color: string; bg: string; icon: typeof Shield; label: string }> = {
   low: { color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-500/10', icon: Shield, label: 'Low Risk' },
@@ -82,6 +82,14 @@ export default function SymptomCheckerPage() {
 
         // Create a notification based on risk level
         try {
+          if (result.risk_level === 'critical') {
+            await createEmergencyAlert({
+              user_id: user.id,
+              severity: 'critical',
+              symptoms: selectedSymptoms,
+            });
+          }
+
           if (result.risk_level === 'critical' || result.risk_level === 'high') {
             await createNotification({
               user_id: user.id,
